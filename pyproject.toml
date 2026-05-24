@@ -11,3 +11,8 @@ dependencies = [
 
 [tool.uv.sources]
 depth-anything-3 = { path = "../depth-anything-3", editable = true }
+
+[dependency-groups]
+dev = [
+    "ipykernel>=7.2.0",
+]
