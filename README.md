@@ -42,6 +42,7 @@ See `CLUSTER.md` for full cluster reference.
 
 ## AI Usage Declaration
 
-Tool used: Claude Sonnet
-Files affected: README.md, CLUSTER.md
-Purpose: Cluster onboarding, environment setup
+| # | Tool | Files affected | Purpose |
+|---|------|----------------|---------|
+| 1 | Claude Sonnet | `README.md`, `CLUSTER.md` | Cluster onboarding, environment setup |
+| 2 | Claude (Cursor) | `notebooks/visualize_dataset.ipynb` | Matplotlib syntax for `visualize_random_batch` dataset inspector |
