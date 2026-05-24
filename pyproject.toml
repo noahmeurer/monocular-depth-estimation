@@ -3,6 +3,11 @@ name = "monocular-depth-estimation"
 version = "0.1.0"
 requires-python = ">=3.11"
 dependencies = [
+    "depth-anything-3",
     "torch>=2.12.0",
     "torchvision>=0.27.0",
+    "xformers>=0.0.35",
 ]
+
+[tool.uv.sources]
+depth-anything-3 = { path = "../depth-anything-3", editable = true }
