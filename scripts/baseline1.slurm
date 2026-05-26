@@ -3,10 +3,9 @@
 #SBATCH --account=cil_jobs
 #SBATCH --time=02:00:00
 #SBATCH --gpus=5060ti:1
-#SBATCH --cpus-per-task=3
 #SBATCH --mem=24G
-#SBATCH --output=/home/nmeurer/monocular-depth-estimation/slurm-%x-%j.out
-#SBATCH --error=/home/nmeurer/monocular-depth-estimation/slurm-%x-%j.err
+#SBATCH --output=/home/nmeurer/monocular-depth-estimation/logs/slurm-%x-%j.out
+#SBATCH --error=/home/nmeurer/monocular-depth-estimation/logs/slurm-%x-%j.err
 
 set -euo pipefail
 
@@ -16,6 +15,16 @@ PRED_DIR="${OUTPUT_DIR}/preds"
 SUBMISSION_CSV="${OUTPUT_DIR}/baseline1_submission.csv"
 
 cd "${REPO_DIR}"
+
+if [ -f "${REPO_DIR}/.env" ]; then
+    set -a
+    source "${REPO_DIR}/.env"
+    set +a
+fi
+
+export HF_HOME="${HF_HOME:-/work/scratch/nmeurer/hf_cache}"
+export XDG_CACHE_HOME="${XDG_CACHE_HOME:-/work/scratch/nmeurer/cache}"
+mkdir -p "${HF_HOME}" "${XDG_CACHE_HOME}"
 
 . /etc/profile.d/modules.sh
 module add cuda/13.0

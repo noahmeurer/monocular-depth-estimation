@@ -220,6 +220,9 @@ __marimo__/
 # Project Reference Documents
 refs/
 
+# Logs
+logs/
+
 # Slurm Artifacts
 slurm-*.out
 slurm-*.err
