@@ -54,6 +54,7 @@ sbatch train.sh
 
 ### Job management
 ```bash
+squeue --me --start # your jobs + estimated start time for pending
 squeue            # check if job is running or waiting
 scancel <job_id>  # cancel a job
 ```
