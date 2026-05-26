@@ -219,3 +219,7 @@ __marimo__/
 
 # Project Reference Documents
 refs/
+
+# Slurm Artifacts
+slurm-*.out
+slurm-*.err
