@@ -4,8 +4,8 @@
 #SBATCH --time=02:00:00
 #SBATCH --gpus=5060ti:1
 #SBATCH --mem=24G
-#SBATCH --output=/home/nmeurer/monocular-depth-estimation/logs/slurm-%x-%j.out
-#SBATCH --error=/home/nmeurer/monocular-depth-estimation/logs/slurm-%x-%j.err
+#SBATCH --output=/home/nmeurer/monocular-depth-estimation/logs/slurm/slurm-%x-%j.out
+#SBATCH --error=/home/nmeurer/monocular-depth-estimation/logs/slurm/slurm-%x-%j.err
 
 set -euo pipefail
 
