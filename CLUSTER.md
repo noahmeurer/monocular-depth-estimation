@@ -73,18 +73,21 @@ scancel <job_id>  # cancel a job
 
 ## CUDA and PyTorch Setup
 
+Project environment setup (uv, `.venv` / `.venv-gb10`): see **README.md**.
+
 ```bash
 module avail              # see available CUDA versions
 module add cuda/13.0      # load a specific version
 module save default       # make it the default for future sessions
 ```
 
-Install PyTorch (match the CUDA version in the URL):
+Without uv, install PyTorch manually (match the CUDA version in the URL):
+
 ```bash
 pip install --no-cache-dir torch torchvision torchaudio --index-url https://download.pytorch.org/whl/cu130
 ```
 
-Always use `--no-cache-dir` — home directory is only 20GB.
+Always use `--no-cache-dir` with pip — home directory is only 20GB.
 
 Verify GPU is working:
 ```python
@@ -145,7 +148,25 @@ Request a specific GPU:
 srun --pty -A cil_jobs -t 120 --gpus 2080ti:1 bash --login
 ```
 
+GB10 (ARM, unified CPU/GPU memory):
+```bash
+srun --gpus gb10:1 --pty -A cil_jobs -t 120 bash --login
+```
+
 Default (no `--gpus` flag) assigns based on availability, priority order: 5060 Ti → 2080 Ti → 1080 Ti.
+
+### GB10 nodes (ARM)
+
+GB10 systems are **aarch64** with unified CPU/GPU memory (~116 GB usable). Environment setup: **README.md** (`.venv-gb10`, `uv sync` on a GB10 node only).
+
+Cluster-specific notes:
+
+- Always use `bash --login` in `srun` (see command above).
+- Not all CUDA modules available on x86 are available on GB10 — run `module avail` on the node.
+- Before GPU-heavy work: `/usr/bin/drop-caches` (Linux uses free RAM as buffer cache).
+- Example batch script: `scripts/baseline_teacher.slurm`.
+
+References: [GB10 nodes](https://www.isg.inf.ethz.ch/Main/HelpClusterComputingStudentClusterRunningJobsGB10), [CUDA and PyTorch](https://www.isg.inf.ethz.ch/Main/HelpClusterComputingStudentClusterCuda).
 
 ---
 
@@ -157,3 +178,4 @@ Default (no `--gpus` flag) assigns based on availability, priority order: 5060 T
 - **Batch jobs can get cancelled** if the cluster is under heavy load — save checkpoints regularly so you can resume.
 - **Hugging Face / git-lfs models:** after cloning, run `lfs-hardlink path_to_checkout` to halve the disk usage (every file exists twice in git-lfs checkouts by default).
 - **CUDA version mismatch:** if you get `RuntimeError: detected CUDA version mismatches`, make sure you loaded the same CUDA module version that you used when installing torch.
+- **GB10 / ARM:** see README — use `.venv-gb10`, not `.venv`.

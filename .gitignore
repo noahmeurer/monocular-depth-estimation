@@ -151,6 +151,7 @@ activemq-data/
 .env
 .envrc
 .venv
+.venv-gb10
 env/
 venv/
 ENV/
@@ -222,7 +223,8 @@ refs/
 
 # Logs
 logs/
-
-# Slurm Artifacts
 slurm-*.out
 slurm-*.err
+
+# Outputs
+outputs/
