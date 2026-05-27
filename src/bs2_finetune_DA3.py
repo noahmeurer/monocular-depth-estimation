@@ -174,7 +174,7 @@ def forward_train(model: DepthAnything3, images: torch.Tensor) -> torch.Tensor:
 
 # ---------- Train / validate ----------
 
-def train_one_epoch(model, loader, optimizer, scaler, device) -> float:
+def train_one_epoch(model, loader, optimizer, scaler, device, epoch: int) -> float:
     model.train()
     model.model.backbone.eval()  # frozen backbone stays in eval mode (no dropout)
     total = 0.0
@@ -191,7 +191,9 @@ def train_one_epoch(model, loader, optimizer, scaler, device) -> float:
         scaler.update()
         total += loss.item()
         if (i + 1) % LOG_INTERVAL == 0:
+            global_step = (epoch - 1) * len(loader) + i
             print(f"  [{i+1}/{len(loader)}] loss={loss.item():.4f}")
+            wandb.log({"train_loss_step": loss.item()}, step=global_step)
     return total / len(loader)
 
 
@@ -278,7 +280,7 @@ def main():
     best_val = float("inf")
     for epoch in range(1, EPOCHS + 1):
         print(f"\nEpoch {epoch}/{EPOCHS}")
-        train_loss = train_one_epoch(model, train_loader, optimizer, scaler, device)
+        train_loss = train_one_epoch(model, train_loader, optimizer, scaler, device, epoch)
         val_metric = validate(model, val_loader, device)
         scheduler.step()
         print(f"  train_loss={train_loss:.4f}  val_si_rmse={val_metric:.4f}  lr={scheduler.get_last_lr()[0]:.2e}")
