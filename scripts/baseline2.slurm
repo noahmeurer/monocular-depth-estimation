@@ -40,7 +40,7 @@ echo "Writing outputs to ${OUTPUT_DIR}"
 
 "${PYTHON}" -c "import torch; print('CUDA available:', torch.cuda.is_available()); print('GPU:', torch.cuda.get_device_name(0) if torch.cuda.is_available() else 'none')"
 
-"${PYTHON}" src/bs2_finetune_DA3.py
+"${PYTHON}" -u src/bs2_finetune_DA3.py
 
 "${PYTHON}" utils/create_submission.py \
   --pred-dir "${PRED_DIR}" \
