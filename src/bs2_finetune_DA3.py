@@ -46,7 +46,7 @@ lora_config = LoraConfig(
     r=4,
     lora_alpha=16,
     init_lora_weights="gaussian",
-    dropout=0.1,
+    lora_dropout=0.1,
     bias="none",
     # TODO: specify target modules
     target_modules=[],
