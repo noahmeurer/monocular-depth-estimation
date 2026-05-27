@@ -1,5 +1,5 @@
 #!/bin/bash
-#SBATCH --job-name=baseline1-da3mono
+#SBATCH --job-name=baseline2-da3mono
 #SBATCH --account=cil_jobs
 #SBATCH --time=14:00:00
 #SBATCH --gpus=5060ti:1
@@ -10,7 +10,7 @@
 set -euo pipefail
 
 REPO_DIR="/home/cdeubel/monocular-depth-estimation"
-OUTPUT_DIR="/work/scratch/cdeubel/outputs/baseline1"
+OUTPUT_DIR="/work/scratch/cdeubel/outputs/baseline2"
 PRED_DIR="${OUTPUT_DIR}/preds"
 SUBMISSION_CSV="${OUTPUT_DIR}/baseline2_submission.csv"
 

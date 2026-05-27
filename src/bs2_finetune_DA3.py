@@ -212,7 +212,7 @@ def main():
     if not input_dir.exists():
         raise FileNotFoundError(f"Input directory {input_dir} does not exist")
         
-    output_dir = Path(SCRATCH_ROOT, "outputs/baseline1")
+    output_dir = Path(SCRATCH_ROOT, "outputs/baseline2")
     ckpt_dir   = output_dir / "checkpoints"
     debug_dir  = output_dir / "depth_vis"
     pred_dir   = output_dir / "preds"
@@ -280,7 +280,10 @@ def main():
     if not TEST_DATA_ROOT.exists():
         raise FileNotFoundError(f"Test dir not found: {TEST_DATA_ROOT}")
 
-    # Do batched zero-shot depth prediction on images
+    # Merge LoRA weights into base model so .inference() is available
+    model = model.merge_and_unload()
+    model.eval()
+
     image_paths: List[Path] = sorted(input_dir.glob("*_rgb.png"))
     for i in range(0, len(image_paths), INFER_BATCH):
         img_batch = image_paths[i:i+INFER_BATCH]
