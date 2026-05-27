@@ -162,6 +162,9 @@ def forward_train(model: DepthAnything3, images: torch.Tensor) -> torch.Tensor:
     #   out = model.model(pixel_values=images)   # if DepthAnything3 wraps a HF model
     #   out = model.forward(images)
     out = model.model(images.unsqueeze(1))  # [B, C, H, W] -> [B, 1, C, H, W]
+    if isinstance(out, dict):
+        print("Model output keys:", list(out.keys()))
+        raise RuntimeError("Dict output — check keys above and update forward_train")
     depth = out.predicted_depth if hasattr(out, "predicted_depth") else out
     if depth.dim() == 3:
         depth = depth.unsqueeze(1)
