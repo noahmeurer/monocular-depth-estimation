@@ -29,7 +29,7 @@ _IMAGENET_MEAN = [0.485, 0.456, 0.406]
 _IMAGENET_STD  = [0.229, 0.224, 0.225]
 
 IMG_SIZE     = 560
-TRAIN_BATCH  = 8
+TRAIN_BATCH  = 2
 INFER_BATCH  = 32
 EPOCHS       = 20
 LR           = 1e-4
@@ -172,6 +172,7 @@ def forward_train(model: DepthAnything3, images: torch.Tensor) -> torch.Tensor:
 
 def train_one_epoch(model, loader, optimizer, scaler, device) -> float:
     model.train()
+    model.model.backbone.eval()  # frozen backbone stays in eval mode (no dropout)
     total = 0.0
     for i, (images, depths) in enumerate(loader):
         images, depths = images.to(device), depths.to(device)
