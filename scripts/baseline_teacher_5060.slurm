@@ -1,7 +1,7 @@
 #!/bin/bash
 #SBATCH --job-name=baseline-teacher-5060
 #SBATCH --account=cil_jobs
-#SBATCH --time=00:30:00
+#SBATCH --time=01:00:00
 #SBATCH --gpus=5060ti:1
 #SBATCH --mem=32G
 #SBATCH --output=/home/nmeurer/monocular-depth-estimation/logs/slurm/slurm-%x-%j.out

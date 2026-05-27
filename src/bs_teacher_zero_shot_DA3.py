@@ -14,7 +14,6 @@ SCRATCH_ROOT = Path("/work/scratch/nmeurer")
 DATA_ROOT = Path("/cluster/courses/cil/monocular-depth-estimation/test")
 
 TEACHER_MODEL = "DA3-GIANT-1.1"
-BATCH_SIZE = 8
 ###
 
 def debug_vis(path: Path, rgb: np.ndarray, depth: np.ndarray, debug_dir: Path):
@@ -86,34 +85,35 @@ def main():
     model = DepthAnything3.from_pretrained(f"depth-anything/{TEACHER_MODEL}")
     model = model.to(device).eval()
 
-    # Do batched zero-shot depth prediction on images
+    # Do zero-shot depth prediction on images
     image_paths: List[Path] = sorted(input_dir.glob("*_rgb.png"))
-    for i in range(0, len(image_paths), BATCH_SIZE):
-        img_batch = image_paths[i:i+BATCH_SIZE]
-        predictions = model.inference(
-            image=[str(p) for p in img_batch], 
+    for p in image_paths:
+        prediction = model.inference(
+            image=[str(p)], 
             process_res=560, 
             process_res_method="upper_bound_resize"
         )
 
         # Process model outputs
-        for p, rgb, depth in zip(img_batch, predictions.processed_images, predictions.depth):
-            # Visualize depth map for debugging
-            debug_vis(p, rgb, depth, debug_dir)
+        rgb = prediction.processed_images[0]
+        depth = prediction.depth[0]
 
-            # Assert depth map size is 560x560
-            assert depth.shape == (560, 560), f"Depth map size is {depth.shape} instead of 560x560"
+        # Assert depth map size is 560x560
+        assert depth.shape == (560, 560), f"Depth map size is {depth.shape} instead of 560x560"
+            
+        # Visualize depth map for debugging
+        debug_vis(p, rgb, depth, debug_dir)
 
-            # Save depth map for baseline evaluation
-            submit_depth = depth.astype(np.float32)
-            valid = np.isfinite(submit_depth) & (submit_depth > 0)
-            if not np.all(valid):
-                fill = np.median(submit_depth[valid]) if np.any(valid) else 1.0
-                submit_depth = np.where(valid, submit_depth, fill).astype(np.float32)
-            submit_depth = np.clip(submit_depth, 1e-6, None)
+        # Save depth map for baseline evaluation
+        submit_depth = depth.astype(np.float32)
+        valid = np.isfinite(submit_depth) & (submit_depth > 0)
+        if not np.all(valid):
+            fill = np.median(submit_depth[valid]) if np.any(valid) else 1.0
+            submit_depth = np.where(valid, submit_depth, fill).astype(np.float32)
+        submit_depth = np.clip(submit_depth, 1e-6, None)
 
-            pred_name = p.stem.replace("_rgb", "") + ".npy"
-            np.save(pred_dir / pred_name, submit_depth)
+        pred_name = p.stem.replace("_rgb", "") + ".npy"
+        np.save(pred_dir / pred_name, submit_depth)
 
 if __name__ == "__main__":
     main()
