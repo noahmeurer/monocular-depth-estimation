@@ -161,7 +161,7 @@ def forward_train(model: DepthAnything3, images: torch.Tensor) -> torch.Tensor:
     # Likely options if this fails:
     #   out = model.model(pixel_values=images)   # if DepthAnything3 wraps a HF model
     #   out = model.forward(images)
-    out = model(images)
+    out = model.model(images)
     depth = out.predicted_depth if hasattr(out, "predicted_depth") else out
     if depth.dim() == 3:
         depth = depth.unsqueeze(1)
