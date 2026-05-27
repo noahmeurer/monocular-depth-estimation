@@ -8,8 +8,15 @@ from PIL import Image
 import torch
 from depth_anything_3.api import DepthAnything3
 
-from utils.create_submission import encode_depth
+import base64
+import zlib
 import pandas as pd
+
+
+def encode_depth(depth: np.ndarray) -> str:
+    depth = np.asarray(depth, dtype=np.float16)
+    compressed = zlib.compress(depth.tobytes(), level=9)
+    return base64.b64encode(compressed).decode("utf-8")
 
 
 ### Configs
