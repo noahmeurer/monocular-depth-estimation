@@ -24,6 +24,8 @@ fi
 
 export HF_HOME="${HF_HOME:-/work/scratch/cdeubel/hf_cache}"
 export XDG_CACHE_HOME="${XDG_CACHE_HOME:-/work/scratch/cdeubel/cache}"
+export HF_HUB_OFFLINE=1
+export TRANSFORMERS_OFFLINE=1
 mkdir -p "${HF_HOME}" "${XDG_CACHE_HOME}"
 
 . /etc/profile.d/modules.sh
