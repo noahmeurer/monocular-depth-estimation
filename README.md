@@ -23,7 +23,7 @@ module add cuda/13.0
 Keep uv’s cache on scratch so the 20GB home quota is not filled:
 
 ```bash
-export UV_CACHE_DIR=/work/scratch/nmeurer/uv-cache
+export UV_CACHE_DIR=/work/scratch/mdealvaro/uv-cache
 ```
 
 #### x86 GPUs (5060 Ti, 2080 Ti, 1080 Ti)
@@ -57,7 +57,7 @@ GB10 nodes are **aarch64**. A `.venv` built on the login node (x86) will not wor
    module add cuda/13.0   # or a version listed by module avail on GB10
 
    export UV_PROJECT_ENVIRONMENT="$PWD/.venv-gb10"
-   export UV_CACHE_DIR=/work/scratch/nmeurer/uv-cache
+   export UV_CACHE_DIR=/work/scratch/mdealvaro/uv-cache
    uv sync
    source .venv-gb10/bin/activate
    ```

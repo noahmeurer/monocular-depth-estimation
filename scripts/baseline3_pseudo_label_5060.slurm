@@ -4,16 +4,16 @@
 #SBATCH --time=08:00:00
 #SBATCH --gpus=5060ti:1
 #SBATCH --mem=32G
-#SBATCH --output=/home/nmeurer/monocular-depth-estimation/logs/slurm/slurm-%x-%j.out
-#SBATCH --error=/home/nmeurer/monocular-depth-estimation/logs/slurm/slurm-%x-%j.err
+#SBATCH --output=/home/mdealvaro/monocular-depth-estimation/logs/slurm/slurm-%x-%j.out
+#SBATCH --error=/home/mdealvaro/monocular-depth-estimation/logs/slurm/slurm-%x-%j.err
 
 set -euo pipefail
 
-REPO_DIR="/home/nmeurer/monocular-depth-estimation"
+REPO_DIR="/home/mdealvaro/monocular-depth-estimation"
 VENV_DIR="${REPO_DIR}/.venv"
 
 # Default to a unique cache directory per job; override by exporting CACHE_DIR.
-CACHE_DIR="${CACHE_DIR:-/work/scratch/nmeurer/outputs/baseline3/pseudo_labels_DA3NESTED-GIANT-LARGE-1.1}"
+CACHE_DIR="${CACHE_DIR:-/work/scratch/mdealvaro/outputs/baseline3/pseudo_labels_DA3NESTED-GIANT-LARGE-1.1}"
 
 cd "${REPO_DIR}"
 
@@ -23,8 +23,8 @@ if [ -f "${REPO_DIR}/.env" ]; then
     set +a
 fi
 
-export HF_HOME="${HF_HOME:-/work/scratch/nmeurer/hf_cache}"
-export XDG_CACHE_HOME="${XDG_CACHE_HOME:-/work/scratch/nmeurer/cache}"
+export HF_HOME="${HF_HOME:-/work/scratch/mdealvaro/hf_cache}"
+export XDG_CACHE_HOME="${XDG_CACHE_HOME:-/work/scratch/mdealvaro/cache}"
 mkdir -p "${HF_HOME}" "${XDG_CACHE_HOME}" "${REPO_DIR}/logs/slurm"
 
 . /etc/profile.d/modules.sh

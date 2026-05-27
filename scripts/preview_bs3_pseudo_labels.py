@@ -52,13 +52,13 @@ def main() -> None:
     parser.add_argument(
         "--pseudo-dir",
         type=Path,
-        default=Path("/work/scratch/nmeurer/outputs/baseline3/pseudo_labels_DA3-GIANT-1.1"),
+        default=Path("/work/scratch/mdealvaro/outputs/baseline3/pseudo_labels_DA3-GIANT-1.1"),
         help="Directory with generated pseudo *_depth.npy files.",
     )
     parser.add_argument(
         "--out-dir",
         type=Path,
-        default=Path("/work/scratch/nmeurer/outputs/baseline3/pseudo_preview"),
+        default=Path("/work/scratch/mdealvaro/outputs/baseline3/pseudo_preview"),
         help="Directory where side-by-side PNG previews are written.",
     )
     parser.add_argument("--num", type=int, default=10, help="Number of samples to visualize.")

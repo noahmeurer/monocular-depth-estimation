@@ -8,7 +8,7 @@ import torch
 from depth_anything_3.api import DepthAnything3
 
 ### Configs
-SCRATCH_ROOT = Path("/work/scratch/nmeurer")
+SCRATCH_ROOT = Path("/work/scratch/mdealvaro")
 DATA_ROOT = Path("/cluster/courses/cil/monocular-depth-estimation/test")
 
 BATCH_SIZE = 32

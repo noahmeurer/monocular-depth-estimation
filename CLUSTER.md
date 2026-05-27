@@ -109,10 +109,10 @@ module add cuda/13.0
 | Location | Size | Use For |
 |---|---|---|
 | `~` (home) | 20GB | Code, environments, small files |
-| `/work/scratch/nmeurer` | 100GB | Datasets, model checkpoints |
+| `/work/scratch/mdealvaro` | 100GB | Datasets, model checkpoints |
 | `/tmp` ($TMPDIR) | 40GB | Fast local SSD — deleted when job ends |
 
-Keep datasets and checkpoints in `/work/scratch/nmeurer` — it's accessible from all nodes. Auto-deletion applies based on age:
+Keep datasets and checkpoints in `/work/scratch/mdealvaro` — it's accessible from all nodes. Auto-deletion applies based on age:
 
 | Used Space | Max Age |
 |---|---|
@@ -126,7 +126,7 @@ Keep datasets and checkpoints in `/work/scratch/nmeurer` — it's accessible fro
 
 **From terminal (Mac):**
 ```bash
-scp /local/path/to/file nmeurer@student-cluster.inf.ethz.ch:~/destination/
+scp /local/path/to/file mdealvaro@student-cluster.inf.ethz.ch:~/destination/
 ```
 
 **Mount as network drive (Mac Finder):**

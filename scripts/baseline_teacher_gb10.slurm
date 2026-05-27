@@ -3,14 +3,14 @@
 #SBATCH --account=cil_jobs
 #SBATCH --time=00:30:00
 #SBATCH --gpus=gb10:1
-#SBATCH --output=/home/nmeurer/monocular-depth-estimation/logs/slurm/slurm-%x-%j.out
-#SBATCH --error=/home/nmeurer/monocular-depth-estimation/logs/slurm/slurm-%x-%j.err
+#SBATCH --output=/home/mdealvaro/monocular-depth-estimation/logs/slurm/slurm-%x-%j.out
+#SBATCH --error=/home/mdealvaro/monocular-depth-estimation/logs/slurm/slurm-%x-%j.err
 
 set -euo pipefail
 
-REPO_DIR="/home/nmeurer/monocular-depth-estimation"
+REPO_DIR="/home/mdealvaro/monocular-depth-estimation"
 VENV_DIR="${REPO_DIR}/.venv-gb10"
-OUTPUT_DIR="/work/scratch/nmeurer/outputs/baseline_teacher"
+OUTPUT_DIR="/work/scratch/mdealvaro/outputs/baseline_teacher"
 PRED_DIR="${OUTPUT_DIR}/preds"
 SUBMISSION_CSV="${OUTPUT_DIR}/baseline_teacher_submission.csv"
 
@@ -22,8 +22,8 @@ if [ -f "${REPO_DIR}/.env" ]; then
     set +a
 fi
 
-export HF_HOME="${HF_HOME:-/work/scratch/nmeurer/hf_cache}"
-export XDG_CACHE_HOME="${XDG_CACHE_HOME:-/work/scratch/nmeurer/cache}"
+export HF_HOME="${HF_HOME:-/work/scratch/mdealvaro/hf_cache}"
+export XDG_CACHE_HOME="${XDG_CACHE_HOME:-/work/scratch/mdealvaro/cache}"
 mkdir -p "${HF_HOME}" "${XDG_CACHE_HOME}"
 
 source "${VENV_DIR}/bin/activate"

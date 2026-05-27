@@ -11,7 +11,7 @@ import torch
 from depth_anything_3.api import DepthAnything3
 
 ### Configs
-SCRATCH_ROOT = Path("/work/scratch/nmeurer")
+SCRATCH_ROOT = Path("/work/scratch/mdealvaro")
 DATA_ROOT = Path("/cluster/courses/cil/monocular-depth-estimation")
 
 TEACHER_MODEL = "DA3NESTED-GIANT-LARGE-1.1"
