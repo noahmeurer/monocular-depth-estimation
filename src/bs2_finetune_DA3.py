@@ -15,6 +15,7 @@ from torch.optim.lr_scheduler import CosineAnnealingLR
 from torch.utils.data import Dataset, DataLoader, Subset
 import torchvision.transforms as T
 import torchvision.transforms.functional as TF
+import wandb
 
 from depth_anything_3.api import DepthAnything3
 
@@ -31,8 +32,8 @@ _IMAGENET_STD  = [0.229, 0.224, 0.225]
 IMG_SIZE     = 560
 TRAIN_BATCH  = 8
 INFER_BATCH  = 32
-EPOCHS       = 10
-LR           = 1e-4
+EPOCHS       = 3
+LR           = 1e-6
 WEIGHT_DECAY = 1e-2
 GRAD_CLIP    = 1.0
 VAL_SPLIT    = 0.1
@@ -40,6 +41,9 @@ NUM_WORKERS  = 0
 AMP          = True
 SEED         = 42
 LOG_INTERVAL = 20
+
+WANDB_PROJECT = "monocular-depth-estimation"
+WANDB_RUN_NAME = "baseline2-full_head"
 
 
 lora_config = LoraConfig(
@@ -224,6 +228,22 @@ def main():
     device = "cuda" if torch.cuda.is_available() else "cpu"
     if device != "cuda":
         print(f"Warning: CUDA is not available, using CPU.")
+
+    wandb.init(
+        project=WANDB_PROJECT,
+        name=WANDB_RUN_NAME,
+        config={
+            "img_size": IMG_SIZE,
+            "train_batch": TRAIN_BATCH,
+            "epochs": EPOCHS,
+            "lr": LR,
+            "weight_decay": WEIGHT_DECAY,
+            "grad_clip": GRAD_CLIP,
+            "val_split": VAL_SPLIT,
+            "amp": AMP,
+            "seed": SEED,
+        },
+    )
 
 
     # Dataset split
