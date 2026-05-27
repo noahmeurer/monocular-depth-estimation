@@ -283,6 +283,8 @@ def main():
         scheduler.step()
         print(f"  train_loss={train_loss:.4f}  val_si_rmse={val_metric:.4f}  lr={scheduler.get_last_lr()[0]:.2e}")
 
+        wandb.log({"train_loss": train_loss, "val_si_rmse": val_metric, "lr": scheduler.get_last_lr()[0]}, step=epoch)
+
         ckpt = {"epoch": epoch, "model": model.state_dict(), "val_si_rmse": val_metric}
         torch.save(ckpt, ckpt_dir / "last.pth")
         if val_metric < best_val:
