@@ -13,7 +13,7 @@ REPO_DIR="/home/nmeurer/monocular-depth-estimation"
 VENV_DIR="${REPO_DIR}/.venv"
 
 # Default to a unique cache directory per job; override by exporting CACHE_DIR.
-CACHE_DIR="${CACHE_DIR:-/work/scratch/nmeurer/outputs/baseline3/pseudo_labels_DA3-GIANT-1.1}"
+CACHE_DIR="${CACHE_DIR:-/work/scratch/nmeurer/outputs/baseline3/pseudo_labels_DA3NESTED-GIANT-LARGE-1.1}"
 
 cd "${REPO_DIR}"
 

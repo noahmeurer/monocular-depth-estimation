@@ -14,7 +14,7 @@ from depth_anything_3.api import DepthAnything3
 SCRATCH_ROOT = Path("/work/scratch/nmeurer")
 DATA_ROOT = Path("/cluster/courses/cil/monocular-depth-estimation")
 
-TEACHER_MODEL = "DA3-GIANT-1.1"
+TEACHER_MODEL = "DA3NESTED-GIANT-LARGE-1.1"
 STUDENT_MODEL = "DA3MONO-LARGE"
 ###
 
