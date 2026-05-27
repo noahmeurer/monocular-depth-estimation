@@ -2,28 +2,35 @@
 
 ## Setup
 
-Clone both repos side by side:
-
 ```bash
 git clone https://github.com/noahmeurer/monocular-depth-estimation.git ~/monocular-depth-estimation
-git clone https://github.com/bytedance-seed/depth-anything-3 ~/depth-anything-3
-cd ~/depth-anything-3 && git submodule update --init --recursive
+cd ~/monocular-depth-estimation
 ```
+
+Depth Anything 3 is installed automatically by `uv sync` (git dependency in `pyproject.toml`).
 
 ### Environment (uv)
 
-This project uses [uv](https://docs.astral.sh/uv/). CUDA 13.0 PyTorch wheels are configured in `pyproject.toml`. 
+Uses [uv](https://docs.astral.sh/uv/) with CUDA 13.0 PyTorch wheels from `pyproject.toml`.
 
-Before launching interactive 5060 Ti sessions, always load the matching CUDA module before `uv sync`. Do not load the module before launching interactive GB10 sessions.
+Copy `.env.example` to `.env` and set `CLUSTER_USERNAME` to your student-cluster login (used for `/work/scratch` paths):
+
+```bash
+cp .env.example .env
+# edit CLUSTER_USERNAME, HF_TOKEN, etc.
+source .env
+```
+
+On x86 GPU nodes, load CUDA before `uv sync`:
 
 ```bash
 module add cuda/13.0
 ```
 
-Keep uv’s cache on scratch so the 20GB home quota is not filled:
+Keep uv’s cache on scratch (20GB home quota):
 
 ```bash
-export UV_CACHE_DIR=/work/scratch/nmeurer/uv-cache
+export UV_CACHE_DIR=/work/scratch/${CLUSTER_USERNAME}/uv-cache
 ```
 
 #### x86 GPUs (5060 Ti, 2080 Ti, 1080 Ti)
@@ -39,50 +46,13 @@ source .venv/bin/activate
 
 #### GB10 (ARM)
 
-GB10 nodes are **aarch64**. A `.venv` built on the login node (x86) will not work there — use a separate `.venv-gb10` and run `uv sync` **only on a GB10 node**.
-
-1. Request an interactive GB10 session (always use `--login`):
-
-   ```bash
-   srun --gpus gb10:1 --pty -A cil_jobs -t 120 bash --login
-   ```
-
-2. On the GB10 node, check which CUDA modules exist (`module avail` — not every version is available on GB10).
-
-3. Create the environment:
-
-   ```bash
-   cd ~/monocular-depth-estimation
-   . /etc/profile.d/modules.sh
-   module add cuda/13.0   # or a version listed by module avail on GB10
-
-   export UV_PROJECT_ENVIRONMENT="$PWD/.venv-gb10"
-   export UV_CACHE_DIR=/work/scratch/nmeurer/uv-cache
-   uv sync
-   source .venv-gb10/bin/activate
-   ```
-
-`xformers` is only installed on x86_64 (no official ARM wheels). Depth Anything 3 falls back to pure PyTorch on GB10.
-
-> **Later (baseline 4 / 3DGS novel views):** DA3’s `gsplat` extra is not in the default env. If you need Gaussian rendering on GB10, you’ll likely have to add `depth-anything-3[gs]` and build or JIT-install `gsplat` on a GB10 node (no Linux aarch64 wheels today) — prototype on x86 first.
-
-Before GPU-heavy work on GB10 (interactive sessions), free RAM used as filesystem cache (CPU and GPU share memory):
-
-```bash
-/usr/bin/drop-caches
-```
-
-This may fail under `sbatch` (no TTY for sudo); `baseline_teacher.slurm` skips it non-fatally in that case.
-
-GB10 batch jobs: `scripts/baseline_teacher.slurm` (`source .venv-gb10`).
+GB10 is **aarch64** — use `.venv-gb10`, not `.venv`. Interactive setup and `drop-caches`: **`CLUSTER.md` → GB10 (interactive)**.
 
 #### Verify GPU
 
 ```bash
 python -c "import torch; print(torch.cuda.is_available(), torch.cuda.get_device_name(0))"
 ```
-
-Cluster reference (Slurm, storage, quotas): see `CLUSTER.md`.
 
 ## Data
 
@@ -104,7 +74,7 @@ Batch job:
 sbatch scripts/baseline1.slurm
 ```
 
-See `CLUSTER.md` for full cluster reference (accounts, `squeue`, Jupyter, storage).
+Slurm accounts, storage, Jupyter: `CLUSTER.md`.
 
 ## AI Usage Declaration
 
