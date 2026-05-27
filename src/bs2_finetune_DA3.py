@@ -243,7 +243,7 @@ def main():
 
 
     # Initialize the DepthAnything3 single-view monocular student model
-    model = load_model(device, mode="lora_head")
+    model = load_model(device, mode="full_head")
 
     optimizer = AdamW(
         filter(lambda p: p.requires_grad, model.parameters()),
@@ -279,10 +279,6 @@ def main():
     # Inference on test set
     if not TEST_DATA_ROOT.exists():
         raise FileNotFoundError(f"Test dir not found: {TEST_DATA_ROOT}")
-
-    # Merge LoRA weights into base model so .inference() is available
-    model = model.merge_and_unload()
-    model.eval()
 
     image_paths: List[Path] = sorted(input_dir.glob("*_rgb.png"))
     for i in range(0, len(image_paths), INFER_BATCH):
