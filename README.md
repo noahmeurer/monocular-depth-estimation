@@ -114,3 +114,4 @@ See `CLUSTER.md` for full cluster reference (accounts, `squeue`, Jupyter, storag
 | 2 | Claude (Cursor) | `notebooks/visualize_dataset.ipynb` | Matplotlib syntax for `visualize_random_batch` dataset inspector |
 | 3 | Codex | `scripts/baseline1.slurm` | Slurm job script for DA3MONO-LARGE zero-shot baseline |
 | 4 | Claude (Cursor) | `README.md`, `CLUSTER.md`, `pyproject.toml`, `scripts/baseline_teacher_gb10.slurm` | GB10/uv dual-env setup (`.venv-gb10`, PyTorch cu130 index, xformers x86-only) |
+| 5 | Codex | `scripts/preview_bs3_pseudo_labels.py` | Debug script for baseline3 pseudo-label generation |
