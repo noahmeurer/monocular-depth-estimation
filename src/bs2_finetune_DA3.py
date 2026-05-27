@@ -139,7 +139,7 @@ def load_model(device: torch.device, mode: Literal["full_head", "lora_head"]) ->
         for p in model.parameters():
             p.requires_grad = False
         # Unfreeze head only
-        for p in model.depth_head.parameters():
+        for p in model.model.head.parameters():
             p.requires_grad = True
 
     elif mode == "lora_head":
