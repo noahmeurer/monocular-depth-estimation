@@ -201,11 +201,8 @@ def load_model(device: torch.device, mode: Literal["full_head", "lora_dpt_blocks
     return model.to(device)
 
 
+# Forward pass
 def forward_train(model: DepthAnything3, images: torch.Tensor) -> torch.Tensor:
-    # TODO: verify raw forward call on cluster — may differ depending on DA3 internals
-    # Likely options if this fails:
-    #   out = model.model(pixel_values=images)   # if DepthAnything3 wraps a HF model
-    #   out = model.forward(images)
     out = model.model(images.unsqueeze(1))  # [B, C, H, W] -> [B, 1, C, H, W]
     depth = out["depth"] if isinstance(out, dict) else out
     if depth.dim() == 3:
@@ -213,8 +210,7 @@ def forward_train(model: DepthAnything3, images: torch.Tensor) -> torch.Tensor:
     return F.interpolate(depth, size=(IMG_SIZE, IMG_SIZE), mode="bilinear", align_corners=False).clamp(min=1e-3)
 
 
-# ---------- Train / validate ----------
-
+# Train for one epoch
 def train_one_epoch(model, loader, optimizer, scaler, device, epoch: int) -> float:
     model.train()
     if MODE == "full_head":
