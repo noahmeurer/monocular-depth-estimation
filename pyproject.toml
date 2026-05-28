@@ -6,9 +6,9 @@ dependencies = [
     "depth-anything-3",
     "torch>=2.12.0",
     "torchvision>=0.27.0",
-    "xformers>=0.0.35",
+    "xformers>=0.0.35; platform_machine == 'x86_64'",
     "wandb>=0.19.0",
-    "platform_machine == 'x86_64'",
+    "peft>=0.19.1",
 ]
 
 [[tool.uv.index]]
