@@ -43,21 +43,26 @@ SEED         = 42
 LOG_INTERVAL = 20
 
 WANDB_PROJECT = "monocular-depth-estimation"
-WANDB_RUN_NAME = "baseline2-full_head"
+
+# ---- switch here to change training mode ----
+MODE           : Literal["full_head", "lora_dpt_blocks"] = "full_head"
+WANDB_RUN_NAME = f"baseline2-{MODE}"
+# ---------------------------------------------
 
 DATA_SOURCE    : Literal["local", "huggingface"] = "local"
 HF_DATASET_NAME = ""      # e.g. "username/cil-depth-estimation"
 HF_SPLIT        = "train"
 
 
+# LoRA on the 4 DPT extraction blocks (out_layers=[4,11,17,23]) — attn + MLP
+_DPT_LORA_TARGETS = r"model\.backbone\.pretrained\.blocks\.(4|11|17|23)\.(attn\.(qkv|proj)|mlp\.fc[12])"
 lora_config = LoraConfig(
     r=4,
     lora_alpha=16,
     init_lora_weights="gaussian",
-    lora_dropout=0.1,
+    lora_dropout=0.0,  # 0 because backbone runs in eval() during training
     bias="none",
-    # TODO: specify target modules
-    target_modules=[],
+    target_modules=_DPT_LORA_TARGETS,
 )
 ###
 
@@ -171,7 +176,7 @@ def silog_loss(pred: torch.Tensor, target: torch.Tensor, lambda_: float = 0.5, e
 
 
 # Model helpers
-def load_model(device: torch.device, mode: Literal["full_head", "lora_head"]) -> DepthAnything3:
+def load_model(device: torch.device, mode: Literal["full_head", "lora_dpt_blocks"]) -> DepthAnything3:
     model = DepthAnything3.from_pretrained("depth-anything/DA3MONO-LARGE")
 
     if mode == "full_head":
@@ -181,7 +186,8 @@ def load_model(device: torch.device, mode: Literal["full_head", "lora_head"]) ->
         for p in model.model.head.parameters():
             p.requires_grad = True
 
-    elif mode == "lora_head":
+    elif mode == "lora_dpt_blocks":
+        # Freeze everything; PEFT adds trainable LoRA adapters only on _DPT_LORA_TARGETS
         model = get_peft_model(model, lora_config)
 
     else:
@@ -211,7 +217,8 @@ def forward_train(model: DepthAnything3, images: torch.Tensor) -> torch.Tensor:
 
 def train_one_epoch(model, loader, optimizer, scaler, device, epoch: int) -> float:
     model.train()
-    model.model.backbone.eval()  # frozen backbone stays in eval mode (no dropout)
+    if MODE == "full_head":
+        model.model.backbone.eval()  # frozen backbone stays in eval mode (no dropout)
     total = 0.0
     for i, (images, depths) in enumerate(loader):
         images, depths = images.to(device), depths.to(device)
@@ -307,7 +314,7 @@ def main():
 
 
     # Initialize the DepthAnything3 single-view monocular student model
-    model = load_model(device, mode="full_head")
+    model = load_model(device, mode=MODE)
 
     optimizer = AdamW(
         filter(lambda p: p.requires_grad, model.parameters()),
