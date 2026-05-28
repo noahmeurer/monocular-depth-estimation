@@ -225,6 +225,7 @@ refs/
 logs/
 slurm-*.out
 slurm-*.err
+wandb/
 
 # Outputs
 outputs/
