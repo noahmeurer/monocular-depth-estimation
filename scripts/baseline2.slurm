@@ -10,7 +10,8 @@
 set -euo pipefail
 
 REPO_DIR="/home/cdeubel/monocular-depth-estimation"
-OUTPUT_DIR="/work/scratch/cdeubel/outputs/baseline2"
+RUN_NAME="baseline2-full_head"
+OUTPUT_DIR="/work/scratch/cdeubel/outputs/baseline2/${RUN_NAME}"
 PRED_DIR="${OUTPUT_DIR}/preds"
 SUBMISSION_CSV="${OUTPUT_DIR}/baseline2_submission.csv"
 

@@ -45,6 +45,10 @@ LOG_INTERVAL = 20
 WANDB_PROJECT = "monocular-depth-estimation"
 WANDB_RUN_NAME = "baseline2-full_head"
 
+DATA_SOURCE    : Literal["local", "huggingface"] = "local"
+HF_DATASET_NAME = ""      # e.g. "username/cil-depth-estimation"
+HF_SPLIT        = "train"
+
 
 lora_config = LoraConfig(
     r=4,
@@ -99,6 +103,37 @@ def debug_vis(path: Path, rgb: np.ndarray, depth: np.ndarray, debug_dir: Path):
 
     out_name = path.stem.replace("_rgb", "_depth_vis") + ".png"
     Image.fromarray(side_by_side).save(debug_dir / out_name)
+
+
+class HFDepthDataset(Dataset):
+    def __init__(self, dataset_name: str, split: str = "train", img_size: int = IMG_SIZE):
+        from datasets import load_dataset
+        self.ds = load_dataset(dataset_name, split=split)
+        self.img_size = img_size
+        self.normalize = T.Normalize(mean=_IMAGENET_MEAN, std=_IMAGENET_STD)
+
+    def __len__(self) -> int:
+        return len(self.ds)
+
+    def __getitem__(self, idx: int):
+        sample = self.ds[idx]
+        image = sample["image"]
+        if not isinstance(image, Image.Image):
+            image = Image.fromarray(image)
+        image = image.convert("RGB").resize((self.img_size, self.img_size), Image.LANCZOS)
+
+        depth = sample["depth"]
+        if isinstance(depth, Image.Image):
+            depth = np.array(depth)
+        depth = depth.astype(np.float32)
+        if depth.shape != (self.img_size, self.img_size):
+            depth = np.array(
+                Image.fromarray(depth).resize((self.img_size, self.img_size), Image.NEAREST)
+            )
+
+        image = self.normalize(TF.to_tensor(image))
+        depth = torch.from_numpy(depth).unsqueeze(0)
+        return image, depth
 
 
 class DepthDataset(Dataset):
@@ -219,7 +254,7 @@ def main():
     if not input_dir.exists():
         raise FileNotFoundError(f"Input directory {input_dir} does not exist")
         
-    output_dir = Path(SCRATCH_ROOT, "outputs/baseline2")
+    output_dir = Path(SCRATCH_ROOT, "outputs/baseline2") / WANDB_RUN_NAME
     ckpt_dir   = output_dir / "checkpoints"
     debug_dir  = output_dir / "depth_vis"
     pred_dir   = output_dir / "preds"
@@ -249,10 +284,16 @@ def main():
 
 
     # Dataset split
-    if not TRAIN_DATA_ROOT.exists():
-        raise FileNotFoundError(f"Train dir not found: {TRAIN_DATA_ROOT}")
-    full_ds = DepthDataset(TRAIN_DATA_ROOT)
-    val_ds  = DepthDataset(TRAIN_DATA_ROOT)
+    if DATA_SOURCE == "huggingface":
+        if not HF_DATASET_NAME:
+            raise ValueError("HF_DATASET_NAME must be set when DATA_SOURCE='huggingface'")
+        full_ds = HFDepthDataset(HF_DATASET_NAME, split=HF_SPLIT)
+        val_ds  = HFDepthDataset(HF_DATASET_NAME, split=HF_SPLIT)
+    else:
+        if not TRAIN_DATA_ROOT.exists():
+            raise FileNotFoundError(f"Train dir not found: {TRAIN_DATA_ROOT}")
+        full_ds = DepthDataset(TRAIN_DATA_ROOT)
+        val_ds  = DepthDataset(TRAIN_DATA_ROOT)
     n   = len(full_ds)
     rng = torch.Generator().manual_seed(SEED)
     idx = torch.randperm(n, generator=rng).tolist()
