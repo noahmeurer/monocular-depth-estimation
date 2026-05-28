@@ -73,18 +73,21 @@ scancel <job_id>  # cancel a job
 
 ## CUDA and PyTorch Setup
 
+Project environment (uv, x86 `.venv`): **README.md**. GB10 `.venv-gb10`: **GB10 (interactive)** below.
+
 ```bash
 module avail              # see available CUDA versions
 module add cuda/13.0      # load a specific version
 module save default       # make it the default for future sessions
 ```
 
-Install PyTorch (match the CUDA version in the URL):
+Without uv, install PyTorch manually (match the CUDA version in the URL):
+
 ```bash
 pip install --no-cache-dir torch torchvision torchaudio --index-url https://download.pytorch.org/whl/cu130
 ```
 
-Always use `--no-cache-dir` — home directory is only 20GB.
+Always use `--no-cache-dir` with pip — home directory is only 20GB.
 
 Verify GPU is working:
 ```python
@@ -106,10 +109,10 @@ module add cuda/13.0
 | Location | Size | Use For |
 |---|---|---|
 | `~` (home) | 20GB | Code, environments, small files |
-| `/work/scratch/nmeurer` | 100GB | Datasets, model checkpoints |
+| `/work/scratch/$CLUSTER_USERNAME` | 100GB | Datasets, model checkpoints |
 | `/tmp` ($TMPDIR) | 40GB | Fast local SSD — deleted when job ends |
 
-Keep datasets and checkpoints in `/work/scratch/nmeurer` — it's accessible from all nodes. Auto-deletion applies based on age:
+Keep datasets and checkpoints in `/work/scratch/$CLUSTER_USERNAME` (set `CLUSTER_USERNAME` in `.env`) — it's accessible from all nodes. Auto-deletion applies based on age:
 
 | Used Space | Max Age |
 |---|---|
@@ -123,7 +126,7 @@ Keep datasets and checkpoints in `/work/scratch/nmeurer` — it's accessible fro
 
 **From terminal (Mac):**
 ```bash
-scp /local/path/to/file nmeurer@student-cluster.inf.ethz.ch:~/destination/
+scp /local/path/to/file <CLUSTER_USERNAME>@student-cluster.inf.ethz.ch:~/destination/
 ```
 
 **Mount as network drive (Mac Finder):**
@@ -145,7 +148,51 @@ Request a specific GPU:
 srun --pty -A cil_jobs -t 120 --gpus 2080ti:1 bash --login
 ```
 
+GB10 (ARM, unified CPU/GPU memory):
+```bash
+srun --gpus gb10:1 --pty -A cil_jobs -t 120 bash --login
+```
+
 Default (no `--gpus` flag) assigns based on availability, priority order: 5060 Ti → 2080 Ti → 1080 Ti.
+
+### GB10 (interactive)
+
+GB10 nodes are **aarch64** with unified CPU/GPU memory (~116 GB usable). A `.venv` built on the login node (x86) will not work there — use `.venv-gb10` and run `uv sync` **only on a GB10 node**.
+
+Prerequisites: clone the repo and copy `.env` as in **README.md** (`CLUSTER_USERNAME`, `HF_TOKEN`, etc.).
+
+1. Request an interactive session (always use `--login`):
+
+   ```bash
+   srun --gpus gb10:1 --pty -A cil_jobs -t 120 bash --login
+   ```
+
+2. Check which CUDA modules exist (`module avail` — not every x86 version is available on GB10).
+
+3. Create the environment:
+
+   ```bash
+   cd ~/monocular-depth-estimation
+   . /etc/profile.d/modules.sh
+   module add cuda/13.0   # or a version from module avail on GB10
+
+   export UV_PROJECT_ENVIRONMENT="$PWD/.venv-gb10"
+   export UV_CACHE_DIR=/work/scratch/${CLUSTER_USERNAME}/uv-cache
+   uv sync
+   source .venv-gb10/bin/activate
+   ```
+
+`xformers` is x86-only; Depth Anything 3 uses pure PyTorch on GB10.
+
+Before heavy GPU work, free filesystem cache (CPU and GPU share RAM):
+
+```bash
+/usr/bin/drop-caches
+```
+
+May fail under `sbatch` (no TTY for sudo); GB10 batch scripts skip it non-fatally. Batch example: `scripts/baseline_teacher_gb10.slurm`.
+
+References: [GB10 nodes](https://www.isg.inf.ethz.ch/Main/HelpClusterComputingStudentClusterRunningJobsGB10), [CUDA and PyTorch](https://www.isg.inf.ethz.ch/Main/HelpClusterComputingStudentClusterCuda).
 
 ---
 
@@ -157,3 +204,4 @@ Default (no `--gpus` flag) assigns based on availability, priority order: 5060 T
 - **Batch jobs can get cancelled** if the cluster is under heavy load — save checkpoints regularly so you can resume.
 - **Hugging Face / git-lfs models:** after cloning, run `lfs-hardlink path_to_checkout` to halve the disk usage (every file exists twice in git-lfs checkouts by default).
 - **CUDA version mismatch:** if you get `RuntimeError: detected CUDA version mismatches`, make sure you loaded the same CUDA module version that you used when installing torch.
+- **GB10 / ARM:** use `.venv-gb10`, not `.venv` — see **GB10 (interactive)** above.

@@ -8,10 +8,22 @@ dependencies = [
     "torchvision>=0.27.0",
     "xformers>=0.0.35",
     "wandb>=0.19.0",
+    "platform_machine == 'x86_64'",
 ]
 
+[[tool.uv.index]]
+name = "pytorch-cu130"
+url = "https://download.pytorch.org/whl/cu130"
+explicit = true
+
 [tool.uv.sources]
-depth-anything-3 = { path = "../depth-anything-3", editable = true }
+depth-anything-3 = { git = "https://github.com/noahmeurer/depth-anything-3.git", rev = "a8b66c63423ce2cc8f0cf529017b75d5d4d6dce7" }
+torch = [
+    { index = "pytorch-cu130", marker = "sys_platform == 'linux'" },
+]
+torchvision = [
+    { index = "pytorch-cu130", marker = "sys_platform == 'linux'" },
+]
 
 [dependency-groups]
 dev = [
