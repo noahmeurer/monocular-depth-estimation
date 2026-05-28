@@ -1,7 +1,8 @@
 import os
 import argparse
+import csv
 from pathlib import Path
-from typing import List, Literal
+from typing import List, Literal, cast
 from datetime import datetime
 import random
 
@@ -23,11 +24,11 @@ import wandb
 from depth_anything_3.api import DepthAnything3
 
 ### Configs
-SCRATCH_ROOT = Path("/work/scratch/nmeurer")
-DATA_ROOT = Path("/cluster/courses/cil/monocular-depth-estimation")
+SCRATCH_ROOT = Path(os.environ.get("SCRATCH_ROOT", "/work/scratch/nmeurer"))
+DATA_ROOT = Path(os.environ.get("DATA_ROOT", "/cluster/courses/cil/monocular-depth-estimation"))
 
-TEACHER_MODEL = "DA3NESTED-GIANT-LARGE-1.1"
-STUDENT_MODEL = "DA3MONO-LARGE"
+TEACHER_MODEL = os.environ.get("TEACHER_MODEL", "DA3-GIANT-1.1")
+STUDENT_MODEL = os.environ.get("STUDENT_MODEL", "DA3MONO-LARGE")
 
 _IMAGENET_MEAN = [0.485, 0.456, 0.406]
 _IMAGENET_STD  = [0.229, 0.224, 0.225]
@@ -37,20 +38,34 @@ TRAIN_BATCH  = 8
 INFER_BATCH  = 32
 EPOCHS       = 3
 LR           = 1e-6
-WEIGHT_DECAY = 1e-2
+WEIGHT_DECAY = 1e-4
 GRAD_CLIP    = 1.0
 VAL_SPLIT    = 0.1
-NUM_WORKERS  = 0
+NUM_WORKERS  = 2
 AMP          = True
 SEED         = 42
 LOG_INTERVAL = 20
+VAL_INTERVAL_STEPS = int(os.environ.get("VAL_INTERVAL_STEPS", "100"))
 
 WANDB_PROJECT = "monocular-depth-estimation"
+TrainMode = Literal["full_head", "surface_head", "lora_dpt_blocks"]
+ValSubsetStrategy = Literal["random", "manifest"]
 
 # ---- switch here to change training mode ----
-MODE           : Literal["full_head", "lora_dpt_blocks"] = "full_head"
+_MODE = os.environ.get("BS3_MODE", "full_head")
+if _MODE not in ("full_head", "surface_head", "lora_dpt_blocks"):
+    raise ValueError(f"Invalid BS3_MODE={_MODE}")
+MODE           : TrainMode = cast(TrainMode, _MODE)
 WANDB_RUN_NAME = f"baseline3-{STUDENT_MODEL}-{MODE}"
 # ---------------------------------------------
+
+_VAL_SUBSET_STRATEGY = os.environ.get("VAL_SUBSET_STRATEGY", "random")
+if _VAL_SUBSET_STRATEGY not in ("random", "manifest"):
+    raise ValueError(f"Invalid VAL_SUBSET_STRATEGY={_VAL_SUBSET_STRATEGY}")
+VAL_SUBSET_STRATEGY: ValSubsetStrategy = cast(ValSubsetStrategy, _VAL_SUBSET_STRATEGY)
+VAL_MANIFEST = os.environ.get("VAL_MANIFEST", "").strip()
+if VAL_INTERVAL_STEPS < 0:
+    raise ValueError("VAL_INTERVAL_STEPS must be non-negative")
 
 # LoRA on the 4 DPT extraction blocks (out_layers=[4,11,17,23]) — attn + MLP
 _DPT_LORA_TARGETS = r"model\.backbone\.pretrained\.blocks\.(4|11|17|23)\.(attn\.(qkv|proj)|mlp\.fc[12])"
@@ -98,6 +113,13 @@ class PseudoLabelDataset(Dataset):
         if not self.image_paths:
             raise FileNotFoundError(f"No *_rgb.png images in {train_dir}")
         self.cache_dir = cache_dir
+        missing = [p.name.replace("_rgb.png", "_depth.npy") for p in self.image_paths if not self._depth_path(p).exists()]
+        if missing:
+            preview = ", ".join(missing[:5])
+            raise FileNotFoundError(
+                f"Pseudo-label cache {cache_dir} is missing {len(missing)} files. "
+                f"Examples: {preview}"
+            )
         self.img_size = img_size
         self.normalize = T.Normalize(mean=_IMAGENET_MEAN, std=_IMAGENET_STD)
 
@@ -122,19 +144,73 @@ class PseudoLabelDataset(Dataset):
         return image, depth
 
 
-def silog_loss(pred: torch.Tensor, target: torch.Tensor, lambda_: float = 0.5, eps: float = 1e-6) -> torch.Tensor:
-    valid = (target > eps) & (pred > eps)
-    d = torch.log(pred[valid]) - torch.log(target[valid])
-    return torch.sqrt((torch.mean(d ** 2) - lambda_ * torch.mean(d) ** 2).clamp(min=1e-8))
+class GroundTruthDepthDataset(Dataset):
+    """Ground-truth labels from train_dir, used only for validation/model selection."""
+
+    def __init__(self, train_dir: Path, img_size: int = IMG_SIZE):
+        self.image_paths = sorted(train_dir.glob("*_rgb.png"))
+        if not self.image_paths:
+            raise FileNotFoundError(f"No *_rgb.png images in {train_dir}")
+        self.img_size = img_size
+        self.normalize = T.Normalize(mean=_IMAGENET_MEAN, std=_IMAGENET_STD)
+
+    def _depth_path(self, img_path: Path) -> Path:
+        return img_path.parent / img_path.name.replace("_rgb.png", "_depth.npy")
+
+    def __len__(self) -> int:
+        return len(self.image_paths)
+
+    def __getitem__(self, idx: int):
+        img_path = self.image_paths[idx]
+        image = Image.open(img_path).convert("RGB").resize((self.img_size, self.img_size), Image.LANCZOS)
+        depth = np.load(self._depth_path(img_path)).astype(np.float32)
+        if depth.shape != (self.img_size, self.img_size):
+            depth = np.array(
+                Image.fromarray(depth).resize((self.img_size, self.img_size), Image.NEAREST)
+            )
+
+        image = self.normalize(TF.to_tensor(image))
+        depth = torch.from_numpy(depth).unsqueeze(0)
+        return image, depth
 
 
-def load_model(device: torch.device, mode: Literal["full_head", "lora_dpt_blocks"]) -> DepthAnything3:
+def scale_invariant_rmse_loss(pred: torch.Tensor, target: torch.Tensor, eps: float = 1e-6) -> torch.Tensor:
+    """Kaggle-style SI-RMSE: remove one log-scale bias per image, then average images."""
+    valid = (
+        torch.isfinite(pred)
+        & torch.isfinite(target)
+        & (pred > 0)
+        & (target > 0)
+    )
+    losses = []
+    for item_idx in range(pred.shape[0]):
+        item_valid = valid[item_idx]
+        if not torch.any(item_valid):
+            continue
+        log_pred = torch.log(torch.clamp(pred[item_idx][item_valid], min=eps))
+        log_target = torch.log(torch.clamp(target[item_idx][item_valid], min=eps))
+        diff = log_pred - log_target
+        variance = torch.mean(diff ** 2) - torch.mean(diff) ** 2
+        losses.append(torch.sqrt(variance.clamp(min=1e-8)))
+    if not losses:
+        raise RuntimeError("No valid pixels remained after masking invalid depth values.")
+    return torch.stack(losses).mean()
+
+
+def load_model(device: torch.device, mode: TrainMode) -> DepthAnything3:
     model = DepthAnything3.from_pretrained(f"depth-anything/{STUDENT_MODEL}")
 
     if mode == "full_head":
         for p in model.parameters():
             p.requires_grad = False
         for p in model.model.head.parameters():
+            p.requires_grad = True
+
+    elif mode == "surface_head":
+        for p in model.parameters():
+            p.requires_grad = False
+        # Unfreeze only the final depth prediction stack, leaving DPT fusion blocks fixed.
+        for p in model.model.head.scratch.output_conv2.parameters():
             p.requires_grad = True
 
     elif mode == "lora_dpt_blocks":
@@ -158,9 +234,83 @@ def forward_train(model: DepthAnything3, images: torch.Tensor) -> torch.Tensor:
     return F.interpolate(depth, size=(IMG_SIZE, IMG_SIZE), mode="bilinear", align_corners=False).clamp(min=1e-3)
 
 
-def train_one_epoch(model, loader, optimizer, scaler, device, epoch: int) -> float:
+def random_validation_indices(n: int, val_n: int) -> List[int]:
+    rng = torch.Generator().manual_seed(SEED)
+    return torch.randperm(n, generator=rng).tolist()[:val_n]
+
+
+def image_id_from_path(path: Path) -> str:
+    stem = path.stem
+    if stem.endswith("_rgb"):
+        return stem[:-4]
+    if stem.endswith("_depth"):
+        return stem[:-6]
+    return stem
+
+
+def manifest_validation_indices(
+    gt_dataset: GroundTruthDepthDataset,
+    manifest_path: Path,
+) -> tuple[List[int], dict[str, float]]:
+    if not manifest_path.exists():
+        raise FileNotFoundError(f"Validation manifest does not exist: {manifest_path}")
+
+    id_to_idx = {image_id_from_path(p): i for i, p in enumerate(gt_dataset.image_paths)}
+    path_to_idx = {str(p.resolve()): i for i, p in enumerate(gt_dataset.image_paths)}
+    indices: List[int] = []
+    seen = set()
+
+    with manifest_path.open(newline="") as f:
+        reader = csv.DictReader(f)
+        if not reader.fieldnames:
+            raise ValueError(f"Validation manifest has no header: {manifest_path}")
+        for row in reader:
+            idx = None
+            image_id = row.get("train_id") or row.get("image_id") or row.get("id")
+            if image_id:
+                idx = id_to_idx.get(image_id)
+            if idx is None and row.get("rgb_path"):
+                rgb_path = str(Path(row["rgb_path"]).resolve())
+                idx = path_to_idx.get(rgb_path)
+                if idx is None:
+                    idx = id_to_idx.get(image_id_from_path(Path(row["rgb_path"])))
+            if idx is None:
+                raise ValueError(f"Manifest row does not match a training image: {row}")
+            if idx not in seen:
+                indices.append(idx)
+                seen.add(idx)
+
+    if not indices:
+        raise ValueError(f"Validation manifest did not contain any usable rows: {manifest_path}")
+    return indices, {"val_manifest_rows": len(indices)}
+
+
+def select_validation_indices(gt_dataset: GroundTruthDepthDataset, val_n: int) -> tuple[List[int], dict[str, float]]:
+    val_n = min(max(1, val_n), len(gt_dataset))
+    if VAL_SUBSET_STRATEGY == "random":
+        print("Selecting GT validation subset randomly.")
+        return random_validation_indices(len(gt_dataset), val_n), {}
+    if VAL_SUBSET_STRATEGY == "manifest":
+        if not VAL_MANIFEST:
+            raise ValueError("VAL_SUBSET_STRATEGY=manifest requires VAL_MANIFEST=/path/to/manifest.csv")
+        print(f"Selecting GT validation subset from manifest: {VAL_MANIFEST}")
+        return manifest_validation_indices(gt_dataset, Path(VAL_MANIFEST))
+    raise ValueError(f"Invalid VAL_SUBSET_STRATEGY={VAL_SUBSET_STRATEGY}")
+
+
+def train_one_epoch(
+    model,
+    loader,
+    optimizer,
+    scaler,
+    device,
+    epoch: int,
+    val_loader,
+    ckpt_dir: Path,
+    best_val: float,
+) -> tuple[float, float]:
     model.train()
-    if MODE == "full_head":
+    if MODE in ("full_head", "surface_head"):
         model.model.backbone.eval()
     total = 0.0
     for i, (images, depths) in enumerate(loader):
@@ -168,18 +318,34 @@ def train_one_epoch(model, loader, optimizer, scaler, device, epoch: int) -> flo
         optimizer.zero_grad()
         with autocast("cuda", enabled=AMP):
             preds = forward_train(model, images)
-            loss  = silog_loss(preds, depths)
+            loss  = scale_invariant_rmse_loss(preds, depths)
         scaler.scale(loss).backward()
         scaler.unscale_(optimizer)
         nn.utils.clip_grad_norm_(model.parameters(), GRAD_CLIP)
         scaler.step(optimizer)
         scaler.update()
         total += loss.item()
+        global_step = (epoch - 1) * len(loader) + i + 1
         if (i + 1) % LOG_INTERVAL == 0:
-            global_step = (epoch - 1) * len(loader) + i
             print(f"  [{i+1}/{len(loader)}] loss={loss.item():.4f}")
-            wandb.log({"train_loss_step": loss.item()}, step=global_step)
-    return total / len(loader)
+            wandb.log({"train_loss_step": loss.item(), "epoch": epoch}, step=global_step)
+        if VAL_INTERVAL_STEPS > 0 and global_step % VAL_INTERVAL_STEPS == 0:
+            best_val, val_metric = validate_and_checkpoint(
+                model=model,
+                loader=val_loader,
+                device=device,
+                ckpt_dir=ckpt_dir,
+                epoch=epoch,
+                global_step=global_step,
+                best_val=best_val,
+                lr=optimizer.param_groups[0]["lr"],
+                trigger="interval",
+            )
+            print(f"  [val step {global_step}] val_si_rmse={val_metric:.4f}")
+            model.train()
+            if MODE in ("full_head", "surface_head"):
+                model.model.backbone.eval()
+    return total / len(loader), best_val
 
 
 @torch.no_grad()
@@ -189,8 +355,48 @@ def validate(model, loader, device) -> float:
     for images, depths in loader:
         images, depths = images.to(device), depths.to(device)
         preds = forward_train(model, images)
-        total += silog_loss(preds, depths).item()
+        total += scale_invariant_rmse_loss(preds, depths).item()
     return total / len(loader)
+
+
+def validate_and_checkpoint(
+    model,
+    loader,
+    device,
+    ckpt_dir: Path,
+    epoch: int,
+    global_step: int,
+    best_val: float,
+    lr: float,
+    trigger: str,
+) -> tuple[float, float]:
+    val_metric = validate(model, loader, device)
+    ckpt = {
+        "epoch": epoch,
+        "global_step": global_step,
+        "model": model.state_dict(),
+        "val_si_rmse": val_metric,
+        "val_trigger": trigger,
+    }
+    torch.save(ckpt, ckpt_dir / "last.pth")
+
+    is_best = val_metric < best_val
+    if is_best:
+        best_val = val_metric
+        torch.save(ckpt, ckpt_dir / "best.pth")
+        print(f"  --> new best (si_rmse={best_val:.4f}, step={global_step}, trigger={trigger})")
+
+    wandb.log(
+        {
+            "val_si_rmse": val_metric,
+            f"val_si_rmse_{trigger}": val_metric,
+            "best_val_si_rmse": best_val,
+            "epoch": epoch,
+            "lr": lr,
+        },
+        step=global_step,
+    )
+    return best_val, val_metric
 
 
 def generate_pseudo_labels(train_dir: Path, cache_dir: Path, device: str) -> bool:
@@ -279,25 +485,41 @@ def main():
             "weight_decay": WEIGHT_DECAY,
             "grad_clip": GRAD_CLIP,
             "val_split": VAL_SPLIT,
+            "val_interval_steps": VAL_INTERVAL_STEPS,
+            "val_subset_strategy": VAL_SUBSET_STRATEGY,
+            "val_manifest": VAL_MANIFEST,
             "amp": AMP,
             "seed": SEED,
             "cache_dir": str(cache_dir),
+            "train_target": "teacher_pseudo_labels",
+            "validation_target": "ground_truth_depth",
+            "train_on_all_pseudo_labels": True,
         },
     )
 
-    full_ds = PseudoLabelDataset(train_dir, cache_dir)
-    n   = len(full_ds)
-    rng = torch.Generator().manual_seed(SEED)
-    idx = torch.randperm(n, generator=rng).tolist()
-    val_n = int(n * VAL_SPLIT)
-    val_idx, train_idx = idx[:val_n], idx[val_n:]
-    train_loader = DataLoader(Subset(full_ds, train_idx), batch_size=TRAIN_BATCH,
-                              shuffle=True,  num_workers=NUM_WORKERS, pin_memory=True)
-    val_loader   = DataLoader(Subset(full_ds, val_idx),   batch_size=TRAIN_BATCH,
-                              shuffle=False, num_workers=NUM_WORKERS, pin_memory=True)
-    print(f"Train: {len(train_idx)}  Val: {len(val_idx)}")
-
+    pseudo_train_ds = PseudoLabelDataset(train_dir, cache_dir)
+    gt_val_ds = GroundTruthDepthDataset(train_dir)
     model = load_model(device, mode=MODE)
+
+    n = len(gt_val_ds)
+    val_n = max(1, int(n * VAL_SPLIT))
+    val_idx, val_stats = select_validation_indices(gt_val_ds, val_n)
+    wandb.config.update({
+        "val_size": len(val_idx),
+        "val_indices_preview": val_idx[:10],
+        **val_stats,
+    })
+    if str(device).startswith("cuda"):
+        torch.cuda.empty_cache()
+
+    train_loader = DataLoader(pseudo_train_ds, batch_size=TRAIN_BATCH,
+                              shuffle=True,  num_workers=NUM_WORKERS, pin_memory=True)
+    val_loader   = DataLoader(Subset(gt_val_ds, val_idx),   batch_size=TRAIN_BATCH,
+                              shuffle=False, num_workers=NUM_WORKERS, pin_memory=True)
+    print(
+        f"Train pseudo-labels: {len(pseudo_train_ds)}  Val GT: {len(val_idx)} "
+        f"({VAL_SUBSET_STRATEGY})"
+    )
 
     optimizer = AdamW(
         filter(lambda p: p.requires_grad, model.parameters()),
@@ -309,19 +531,36 @@ def main():
     best_val = float("inf")
     for epoch in range(1, EPOCHS + 1):
         print(f"\nEpoch {epoch}/{EPOCHS}")
-        train_loss = train_one_epoch(model, train_loader, optimizer, scaler, device, epoch)
-        val_metric = validate(model, val_loader, device)
+        train_loss, best_val = train_one_epoch(
+            model=model,
+            loader=train_loader,
+            optimizer=optimizer,
+            scaler=scaler,
+            device=device,
+            epoch=epoch,
+            val_loader=val_loader,
+            ckpt_dir=ckpt_dir,
+            best_val=best_val,
+        )
+        global_step = epoch * len(train_loader)
+        best_val, val_metric = validate_and_checkpoint(
+            model=model,
+            loader=val_loader,
+            device=device,
+            ckpt_dir=ckpt_dir,
+            epoch=epoch,
+            global_step=global_step,
+            best_val=best_val,
+            lr=optimizer.param_groups[0]["lr"],
+            trigger="epoch_end",
+        )
         scheduler.step()
         print(f"  train_loss={train_loss:.4f}  val_si_rmse={val_metric:.4f}  lr={scheduler.get_last_lr()[0]:.2e}")
 
-        wandb.log({"train_loss": train_loss, "val_si_rmse": val_metric, "lr": scheduler.get_last_lr()[0]}, step=epoch)
-
-        ckpt = {"epoch": epoch, "model": model.state_dict(), "val_si_rmse": val_metric}
-        torch.save(ckpt, ckpt_dir / "last.pth")
-        if val_metric < best_val:
-            best_val = val_metric
-            torch.save(ckpt, ckpt_dir / "best.pth")
-            print(f"  --> new best (si_rmse={best_val:.4f})")
+        wandb.log(
+            {"train_loss": train_loss, "lr": scheduler.get_last_lr()[0], "epoch": epoch},
+            step=global_step,
+        )
 
     print(f"\nDone. Best val SI-RMSE: {best_val:.4f}")
 
