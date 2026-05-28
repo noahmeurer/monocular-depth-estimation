@@ -1,5 +1,6 @@
 from pathlib import Path
-from typing import List, Literal
+from typing import List, Literal, cast
+import os
 import random
 
 import matplotlib.pyplot as plt
@@ -21,9 +22,9 @@ from depth_anything_3.api import DepthAnything3
 
 
 ### Configs
-SCRATCH_ROOT    = Path("/work/scratch/cdeubel")
-TRAIN_DATA_ROOT = Path("/cluster/courses/cil/monocular-depth-estimation/train")
-TEST_DATA_ROOT  = Path("/cluster/courses/cil/monocular-depth-estimation/test")
+SCRATCH_ROOT    = Path(os.environ.get("SCRATCH_ROOT", "/work/scratch/cdeubel"))
+TRAIN_DATA_ROOT = Path(os.environ.get("TRAIN_DATA_ROOT", "/cluster/courses/cil/monocular-depth-estimation/train"))
+TEST_DATA_ROOT  = Path(os.environ.get("TEST_DATA_ROOT", "/cluster/courses/cil/monocular-depth-estimation/test"))
 DATA_ROOT       = TEST_DATA_ROOT
 
 _IMAGENET_MEAN = [0.485, 0.456, 0.406]
@@ -34,18 +35,22 @@ TRAIN_BATCH  = 8
 INFER_BATCH  = 32
 EPOCHS       = 3
 LR           = 1e-6
-WEIGHT_DECAY = 1e-2
+WEIGHT_DECAY = 1e-4
 GRAD_CLIP    = 1.0
 VAL_SPLIT    = 0.1
-NUM_WORKERS  = 0
+NUM_WORKERS  = 2
 AMP          = True
 SEED         = 42
 LOG_INTERVAL = 20
 
 WANDB_PROJECT = "monocular-depth-estimation"
+TrainMode = Literal["full_head", "surface_head", "lora_dpt_blocks"]
 
 # ---- switch here to change training mode ----
-MODE           : Literal["full_head", "lora_dpt_blocks"] = "full_head"
+_MODE = os.environ.get("BS2_MODE", "full_head")
+if _MODE not in ("full_head", "surface_head", "lora_dpt_blocks"):
+    raise ValueError(f"Invalid BS2_MODE={_MODE}")
+MODE           : TrainMode = cast(TrainMode, _MODE)
 WANDB_RUN_NAME = f"baseline2-{MODE}"
 # ---------------------------------------------
 
@@ -169,14 +174,31 @@ class DepthDataset(Dataset):
         return image, depth
     
 
-def silog_loss(pred: torch.Tensor, target: torch.Tensor, lambda_: float = 0.5, eps: float = 1e-6) -> torch.Tensor:
-    valid = (target > eps) & (pred > eps)
-    d = torch.log(pred[valid]) - torch.log(target[valid])
-    return torch.sqrt((torch.mean(d ** 2) - lambda_ * torch.mean(d) ** 2).clamp(min=1e-8))
+def scale_invariant_rmse_loss(pred: torch.Tensor, target: torch.Tensor, eps: float = 1e-6) -> torch.Tensor:
+    """Kaggle-style SI-RMSE: remove one log-scale bias per image, then average images."""
+    valid = (
+        torch.isfinite(pred)
+        & torch.isfinite(target)
+        & (pred > 0)
+        & (target > 0)
+    )
+    losses = []
+    for item_idx in range(pred.shape[0]):
+        item_valid = valid[item_idx]
+        if not torch.any(item_valid):
+            continue
+        log_pred = torch.log(torch.clamp(pred[item_idx][item_valid], min=eps))
+        log_target = torch.log(torch.clamp(target[item_idx][item_valid], min=eps))
+        diff = log_pred - log_target
+        variance = torch.mean(diff ** 2) - torch.mean(diff) ** 2
+        losses.append(torch.sqrt(variance.clamp(min=1e-8)))
+    if not losses:
+        raise RuntimeError("No valid pixels remained after masking invalid depth values.")
+    return torch.stack(losses).mean()
 
 
 # Model helpers
-def load_model(device: torch.device, mode: Literal["full_head", "lora_dpt_blocks"]) -> DepthAnything3:
+def load_model(device: torch.device, mode: TrainMode) -> DepthAnything3:
     model = DepthAnything3.from_pretrained("depth-anything/DA3MONO-LARGE")
 
     if mode == "full_head":
@@ -184,6 +206,13 @@ def load_model(device: torch.device, mode: Literal["full_head", "lora_dpt_blocks
             p.requires_grad = False
         # Unfreeze head only
         for p in model.model.head.parameters():
+            p.requires_grad = True
+
+    elif mode == "surface_head":
+        for p in model.parameters():
+            p.requires_grad = False
+        # Unfreeze only the final depth prediction stack, leaving DPT fusion blocks fixed.
+        for p in model.model.head.scratch.output_conv2.parameters():
             p.requires_grad = True
 
     elif mode == "lora_dpt_blocks":
@@ -213,7 +242,7 @@ def forward_train(model: DepthAnything3, images: torch.Tensor) -> torch.Tensor:
 # Train for one epoch
 def train_one_epoch(model, loader, optimizer, scaler, device, epoch: int) -> float:
     model.train()
-    if MODE == "full_head":
+    if MODE in ("full_head", "surface_head"):
         model.model.backbone.eval()  # frozen backbone stays in eval mode (no dropout)
     total = 0.0
     for i, (images, depths) in enumerate(loader):
@@ -221,7 +250,7 @@ def train_one_epoch(model, loader, optimizer, scaler, device, epoch: int) -> flo
         optimizer.zero_grad()
         with autocast("cuda", enabled=AMP):
             preds = forward_train(model, images)
-            loss  = silog_loss(preds, depths)
+            loss  = scale_invariant_rmse_loss(preds, depths)
         scaler.scale(loss).backward()
         scaler.unscale_(optimizer)
         nn.utils.clip_grad_norm_(model.parameters(), GRAD_CLIP)
@@ -242,7 +271,7 @@ def validate(model, loader, device) -> float:
     for images, depths in loader:
         images, depths = images.to(device), depths.to(device)
         preds = forward_train(model, images)
-        total += silog_loss(preds, depths).item()
+        total += scale_invariant_rmse_loss(preds, depths).item()
     return total / len(loader)
 
 
