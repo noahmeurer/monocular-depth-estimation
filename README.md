@@ -5,6 +5,13 @@ zero-shot DA3 evaluation, ground-truth fine-tuning, teacher pseudo-label
 adaptation, distribution-aware validation selection, and novel-view dataset
 generation.
 
+## Baseline Overview
+
+- **Baseline 1:** run DA3MONO-LARGE zero-shot to establish the compact student reference.
+- **Baseline 2:** fine-tune the student on provided ground-truth depth to test direct task-label adaptation.
+- **Baseline 3:** fine-tune on stronger-teacher pseudo-labels, with cosine/PCA validation manifests for target-aware checkpoint selection.
+- **Baseline 4:** generate teacher-guided novel views for the most target-similar images to test geometric augmentation quality.
+
 ## Environment
 
 The project uses `uv` and installs Depth Anything 3 from the pinned git source
@@ -41,14 +48,14 @@ model weights should already be present in the user's scratch cache.
 | Experiment | Purpose | Main code | Slurm / utility |
 |---|---|---|---|
 | Baseline 1 | DA3MONO-LARGE zero-shot test prediction | `src/bs1_zero_shot_DA3.py` | `scripts/baseline1.slurm` |
-| Teacher zero-shot | Larger DA3 teacher zero-shot reference | `src/bs_teacher_zero_shot_DA3.py` | `scripts/baseline_teacher_5060.slurm`, `scripts/baseline_teacher_gb10.slurm` |
+| Teacher zero-shot | Larger DA3 teacher zero-shot reference | `src/bs_teacher_zero_shot_DA3.py` | `scripts/baseline_teacher_5060.slurm` |
 | Baseline 2 | Fine-tune DA3MONO-LARGE on provided GT depth | `src/bs2_finetune_DA3.py` | `scripts/baseline2.slurm`, `scripts/baseline2_surface_head.slurm` |
 | Baseline 3 pseudo-label cache | Generate teacher pseudo-labels for train images | `src/bs3_pseudo_label_DA3.py` | `scripts/baseline3_pseudo_label_5060.slurm` |
 | Baseline 3 training | Fine-tune student on teacher pseudo-labels and validate on GT | `src/bs3_pseudo_label_DA3_train.py` | `scripts/baseline3_train.slurm` |
 | Baseline 3 feature extraction | Extract pooled DA3/DINO backbone features for train/test images | `src/bs3_extract_da3_features.py` | `scripts/baseline3_extract_features.slurm` |
 | Validation manifests | Build cosine/PCA validation subsets and HTML previews | `scripts/baseline3_build_val_manifest.py` | standalone Python utility |
 | Baseline 4 novel views | Generate original plus left/right/up/down samples for top-k images | `src/bs4_generate_novel_views.py` | `scripts/baseline4_generate_novel_views.slurm` |
-| Submission helpers | Run checkpoint inference and create Kaggle CSV | `utils/predict_da3_checkpoint.py`, `utils/create_submission.py` | standalone utilities |
+| Submission helper | Create Kaggle CSV from saved prediction arrays | `utils/create_submission.py` | standalone utility |
 
 ## Reproducibility Guide
 
@@ -164,16 +171,9 @@ TOP_K=250 \
 sbatch scripts/baseline4_generate_novel_views.slurm
 ```
 
-## Creating a Submission From a Checkpoint
+## Creating a Submission From Prediction Arrays
 
 ```bash
-python utils/predict_da3_checkpoint.py \
-  --ckpt /path/to/checkpoints/best.pth \
-  --output-dir /work/scratch/$USER/outputs/my_submission_run \
-  --model DA3MONO-LARGE \
-  --infer-batch 32 \
-  --debug-vis-limit 16
-
 python utils/create_submission.py \
   --pred-dir /work/scratch/$USER/outputs/my_submission_run/preds \
   --out-csv /work/scratch/$USER/outputs/my_submission_run/submission.csv
@@ -195,17 +195,11 @@ $SCRATCH_ROOT/models/baseline3-*/
 $SCRATCH_ROOT/outputs/baseline4/novel_views_DA3-GIANT-1.1_cosine_top250_*/
 ```
 
-`SCRATCH.md` may contain a more specific, team-local index of generated
-artifacts. It is useful for internal reproducibility, but should be checked
-before public submission because scratch paths are user-specific.
-
 ## Candidate Cleanup Before Zip Submission
 
 The following items are candidates for removal or exclusion from the final zip
 unless the course staff explicitly expects them:
 
-- GB10-specific wrappers and notes: `scripts/baseline_teacher_gb10.slurm` and
-  GB10-only setup details in `CLUSTER.md`.
 - Obsolete or exploratory notebooks: especially
   `notebooks/novel_view_synthesis_messy.ipynb` if the cleaned notebook is kept.
 - Local/generated outputs: `outputs/`, `logs/`, W&B run folders, preview panels,
@@ -213,8 +207,6 @@ unless the course staff explicitly expects them:
 - One-off debug utilities that are not referenced in the paper or README, such
   as `scripts/preview_bs3_pseudo_labels.py` and
   `utils/test_baseline2_checkpoint.py`.
-- Cluster-internal documentation (`CLUSTER.md`, `SCRATCH.md`) if the final
-  submission should be portable rather than ETH-cluster-specific.
 
 Do not delete source files, Slurm wrappers, or utilities needed by the
 experiment map above without first updating this README.
@@ -223,10 +215,10 @@ experiment map above without first updating this README.
 
 | # | Tool | Files affected | Purpose |
 |---|------|----------------|---------|
-| 1 | Claude Sonnet | `README.md`, `CLUSTER.md` | Cluster onboarding and environment setup |
+| 1 | Claude Sonnet | `README.md` | Cluster-oriented environment setup |
 | 2 | Claude (Cursor) | `notebooks/visualize_dataset.ipynb` | Matplotlib syntax for `visualize_random_batch` dataset inspector |
 | 3 | Codex | `scripts/baseline1.slurm` | Slurm job script for DA3MONO-LARGE zero-shot baseline |
-| 4 | Claude (Cursor) | `README.md`, `CLUSTER.md`, `pyproject.toml`, `scripts/baseline_teacher_gb10.slurm` | GB10/uv dual-environment setup (`.venv-gb10`, PyTorch cu130 index, xformers x86-only) |
+| 4 | Claude (Cursor) | `README.md`, `pyproject.toml` | uv environment setup |
 | 5 | Codex | `scripts/preview_bs3_pseudo_labels.py` | Debug script for Baseline 3 pseudo-label inspection |
 | 6 | Codex | `src/bs2_finetune_DA3.py`, `scripts/baseline2.slurm`, `scripts/baseline2_surface_head.slurm` | Baseline 2 GT fine-tuning, corrected per-image SiLog validation, checkpoint selection, and full/surface-head modes |
 | 7 | Codex | `src/bs3_pseudo_label_DA3_train.py`, `scripts/baseline3_train.slurm` | Baseline 3 pseudo-label adaptation with intra-epoch validation and random/manifest validation selection |

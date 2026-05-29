@@ -41,10 +41,6 @@ def main():
     device = "cuda" if torch.cuda.is_available() else "cpu"
     if device != "cuda":
         print(f"Warning: CUDA is not available, using CPU.")
-    elif "GB10" in torch.cuda.get_device_name(0):
-        # PyTorch cu130's bundled cuDNN currently fails on GB10/aarch64 convs.
-        torch.backends.cudnn.enabled = False
-        print("Disabled cuDNN backend for GB10")
     
     # Setup cache directory
     cache_dir = Path(args.cache)
