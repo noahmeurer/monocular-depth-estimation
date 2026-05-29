@@ -25,24 +25,6 @@ uv sync
 source .venv/bin/activate
 ```
 
-The scripts assume the CIL cluster dataset layout:
-
-```text
-/cluster/courses/cil/monocular-depth-estimation/train
-/cluster/courses/cil/monocular-depth-estimation/test
-```
-
-Most jobs write to scratch. The usual convention is:
-
-```bash
-export SCRATCH_ROOT=/work/scratch/$USER
-export HF_HOME=$SCRATCH_ROOT/hf_cache
-export XDG_CACHE_HOME=$SCRATCH_ROOT/cache
-```
-
-The Slurm wrappers set offline Hugging Face cache mode by default, so the DA3
-model weights should already be present in the user's scratch cache.
-
 ## Experiment Map
 
 | Experiment | Purpose | Main code | Slurm / utility |
@@ -179,40 +161,7 @@ python utils/create_submission.py \
   --out-csv /work/scratch/$USER/outputs/my_submission_run/submission.csv
 ```
 
-## Important Scratch Artifacts
-
-The exact scratch locations used during the project depended on the user who
-launched each job. These paths are the important artifact types needed to
-reproduce the main experiments:
-
-```text
-$SCRATCH_ROOT/outputs/baseline1/
-$SCRATCH_ROOT/outputs/baseline2/
-$SCRATCH_ROOT/outputs/baseline3/pseudo_labels_DA3-GIANT-1.1/
-$SCRATCH_ROOT/outputs/baseline3/pseudo_labels_DA3NESTED-GIANT-LARGE-1.1/
-$SCRATCH_ROOT/outputs/baseline3/feature_cache/da3_backbone_DA3MONO-LARGE/
-$SCRATCH_ROOT/models/baseline3-*/
-$SCRATCH_ROOT/outputs/baseline4/novel_views_DA3-GIANT-1.1_cosine_top250_*/
-```
-
-## Candidate Cleanup Before Zip Submission
-
-The following items are candidates for removal or exclusion from the final zip
-unless the course staff explicitly expects them:
-
-- Obsolete or exploratory notebooks: especially
-  `notebooks/novel_view_synthesis_messy.ipynb` if the cleaned notebook is kept.
-- Local/generated outputs: `outputs/`, `logs/`, W&B run folders, preview panels,
-  predictions, checkpoint directories, and generated submissions.
-- One-off debug utilities that are not referenced in the paper or README, such
-  as `scripts/preview_bs3_pseudo_labels.py` and
-  `utils/test_baseline2_checkpoint.py`.
-
-Do not delete source files, Slurm wrappers, or utilities needed by the
-experiment map above without first updating this README.
-
 ## AI Usage Declaration
-
 | # | Tool | Files affected | Purpose |
 |---|------|----------------|---------|
 | 1 | Claude Sonnet | `README.md` | Cluster-oriented environment setup |
