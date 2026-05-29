@@ -39,7 +39,7 @@ from bs3_pseudo_label_DA3_train import (
 
 def parse_args() -> argparse.Namespace:
     parser = argparse.ArgumentParser(
-        description="Resume a Baseline3 checkpoint and adapt on the top-k target-similar pseudo-labeled train images."
+        description="Baseline4 ablation A: resume a Baseline3 checkpoint and adapt on top-k target-similar pseudo-labeled train images."
     )
     parser.add_argument("--cache", type=Path, required=True, help="Directory with teacher pseudo-label *_depth.npy files.")
     parser.add_argument("--resume", type=Path, required=True, help="Checkpoint to resume from.")
@@ -202,7 +202,7 @@ def main() -> None:
 
     current_datetime = datetime.now().strftime("%Y-%m-%d_%H-%M-%S")
     output_dir = args.output_dir or (
-        SCRATCH_ROOT / f"models/baseline3-top{args.top_k}-adapt-{STUDENT_MODEL}-{args.mode}-{current_datetime}"
+        SCRATCH_ROOT / f"models/baseline4-ablationA-top{args.top_k}-adapt-{STUDENT_MODEL}-{args.mode}-{current_datetime}"
     )
     ckpt_dir = output_dir / "checkpoints"
     ckpt_dir.mkdir(parents=True, exist_ok=False)
@@ -240,12 +240,12 @@ def main() -> None:
     }
     (output_dir / "source_checkpoint_metadata.json").write_text(json.dumps(source_meta, indent=2) + "\n")
 
-    run_name = args.wandb_name or f"baseline3-top{args.top_k}-adapt-{STUDENT_MODEL}-{mode}-{current_datetime}"
+    run_name = args.wandb_name or f"baseline4-ablationA-top{args.top_k}-adapt-{STUDENT_MODEL}-{mode}-{current_datetime}"
     wandb.init(
         project=args.wandb_project,
         name=run_name,
         config={
-            "experiment": "baseline3_topk_adapt",
+            "experiment": "baseline4_ablationA_topk_adapt",
             "teacher_model": TEACHER_MODEL,
             "student_model": STUDENT_MODEL,
             "mode": mode,

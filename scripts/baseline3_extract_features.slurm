@@ -46,7 +46,7 @@ echo "Feature batch size: ${VAL_FEATURE_BATCH}"
 
 "${PYTHON}" -c "import torch; print('CUDA available:', torch.cuda.is_available()); print('GPU:', torch.cuda.get_device_name(0) if torch.cuda.is_available() else 'none')"
 
-"${PYTHON}" -u scripts/baseline3_extract_da3_features.py \
+"${PYTHON}" -u src/bs3_extract_da3_features.py \
   --model "${STUDENT_MODEL}" \
   --output-dir "${FEATURE_DIR}" \
   --batch-size "${VAL_FEATURE_BATCH}"

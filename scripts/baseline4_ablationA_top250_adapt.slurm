@@ -1,5 +1,5 @@
 #!/bin/bash
-#SBATCH --job-name=bs3-top250-adapt
+#SBATCH --job-name=bs4-ablationA-top250
 #SBATCH --account=cil_jobs
 #SBATCH --time=04:00:00
 #SBATCH --gpus=5060ti:1
@@ -27,7 +27,7 @@ ADAPT_WEIGHT_DECAY="${ADAPT_WEIGHT_DECAY:-1e-4}"
 RUN_INFERENCE="${RUN_INFERENCE:-1}"
 
 RUN_STAMP="$(date +%Y-%m-%d_%H-%M-%S)"
-OUTPUT_DIR="${OUTPUT_DIR:-${SCRATCH_ROOT}/models/baseline3-top${TOP_K}-adapt-${TEACHER_MODEL}-${BS3_MODE}-${RUN_STAMP}}"
+OUTPUT_DIR="${OUTPUT_DIR:-${SCRATCH_ROOT}/models/baseline4-ablationA-top${TOP_K}-adapt-${TEACHER_MODEL}-${BS3_MODE}-${RUN_STAMP}}"
 
 cd "${REPO_DIR}"
 
@@ -80,7 +80,7 @@ fi
 
 "${PYTHON}" -c "import torch; print('CUDA available:', torch.cuda.is_available()); print('GPU:', torch.cuda.get_device_name(0) if torch.cuda.is_available() else 'none')"
 
-"${PYTHON}" -u src/bs3_topk_adapt.py \
+"${PYTHON}" -u src/bs4_ablationA_topk_adapt.py \
   --cache "${CACHE_DIR}" \
   --resume "${RESUME_CKPT}" \
   --manifest "${TOPK_MANIFEST}" \
@@ -94,7 +94,7 @@ fi
 
 if [ "${RUN_INFERENCE}" = "1" ]; then
     INFER_OUTPUT_DIR="${OUTPUT_DIR}/test_inference_last"
-    SUBMISSION_CSV="${OUTPUT_DIR}/baseline3_top${TOP_K}_adapt_submission.csv"
+    SUBMISSION_CSV="${OUTPUT_DIR}/baseline4_ablationA_top${TOP_K}_adapt_submission.csv"
     "${PYTHON}" -u utils/predict_da3_checkpoint.py \
       --ckpt "${OUTPUT_DIR}/checkpoints/last.pth" \
       --output-dir "${INFER_OUTPUT_DIR}" \
