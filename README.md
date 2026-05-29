@@ -111,3 +111,4 @@ For folders with thousands of files (e.g. pseudo-labels), use `--chunk-size 1000
 | 10 | Claude (Cursor) | `notebooks/novel_view_synthesis.ipynb` | gsplat splat rendering and depth reprojection helpers |
 | 11 | Claude (Cursor) | `notebooks/novel_view_synthesis.ipynb` | Clean refactor of `novel_view_synthesis_messy.ipynb` (author's work) and stacked multi-view figures |
 | 12 | Codex | `src/bs4_generate_novel_views.py`, `scripts/baseline4_generate_novel_views.slurm` | Baseline4 top-250 cosine novel-view dataset generation using DA3-GIANT Gaussian splats and confidence-masked reprojected depth |
+| 13 | Codex | `src/bs4_ablationB_aug_adapt.py`, `scripts/baseline4_ablationB_aug_adapt.slurm` | Baseline4 ablation B fine-tuning on the generated 250-image augmented dataset (original + left/right/up/down novel views) from the same saved Baseline3 checkpoint |
